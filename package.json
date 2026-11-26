@@ -45,7 +45,11 @@
     "pack:check": "npm pack --dry-run --ignore-scripts",
     "prepublishOnly": "npm run lint && npm run typecheck && npm run build:types && npm test"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.15.0",
+    "typescript": "^7.0.2"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/codest0411/packsafe.git"
