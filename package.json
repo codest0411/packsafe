@@ -45,5 +45,13 @@
     "pack:check": "npm pack --dry-run --ignore-scripts",
     "prepublishOnly": "npm run lint && npm run typecheck && npm run build:types && npm test"
   },
-  "devDependencies": {}
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codest0411/packsafe.git"
+  },
+  "homepage": "https://github.com/codest0411/packsafe#readme",
+  "bugs": {
+    "url": "https://github.com/codest0411/packsafe/issues"
+  }
 }
