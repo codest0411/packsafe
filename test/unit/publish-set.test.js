@@ -18,14 +18,16 @@ describe('publish-set and Windows npm resolution', () => {
   });
 
   it('resolves npm-cli.js next to Node on Windows without shell: true', () => {
-    const winCli = path.join('C:\\Program Files\\nodejs', 'node_modules', 'npm', 'bin', 'npm-cli.js');
+    const nodeDir = path.join('/mock', 'nodejs');
+    const winExe = path.join(nodeDir, 'node.exe');
+    const winCli = path.join(nodeDir, 'node_modules', 'npm', 'bin', 'npm-cli.js');
     const res = resolveNpmCommand({
       env: {},
-      execPath: 'C:\\Program Files\\nodejs\\node.exe',
+      execPath: winExe,
       platform: 'win32',
       existsSync: (p) => p === winCli
     });
-    assert.equal(res.command, 'C:\\Program Files\\nodejs\\node.exe');
+    assert.equal(res.command, winExe);
     assert.deepEqual(res.baseArgs, [winCli]);
   });
 
