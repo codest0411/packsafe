@@ -1,0 +1,49 @@
+{
+  "name": "packsafe",
+  "version": "0.1.0",
+  "description": "Pre-publish security & privacy gate for npm packages. Audits the exact publish set for leaked usernames, home paths, sourcemaps, secrets, risky files, and internal URLs.",
+  "keywords": [
+    "npm",
+    "publish",
+    "security",
+    "privacy",
+    "prepublish",
+    "secrets",
+    "sourcemap",
+    "tarball",
+    "audit",
+    "cli"
+  ],
+  "license": "MIT",
+  "author": "PackSafe Contributors",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "bin": {
+    "packsafe": "./bin/packsafe.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "types/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "lint": "eslint bin src test eslint.config.js",
+    "typecheck": "tsc -p tsconfig.json",
+    "build:types": "tsc -p tsconfig.build.json",
+    "test": "node --test test/unit/*.test.js test/e2e/*.test.js",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=90 --test-coverage-exclude=test/** test/unit/*.test.js test/e2e/*.test.js",
+    "pack:check": "npm pack --dry-run --ignore-scripts",
+    "prepublishOnly": "npm run lint && npm run typecheck && npm run build:types && npm test"
+  },
+  "devDependencies": {}
+}

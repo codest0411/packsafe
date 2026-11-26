@@ -1,0 +1,69 @@
+You are a senior Node.js engineer, open-source maintainer and application-security reviewer. Build a ship-ready, public, MIT-licensed npm package called "packsafe" (verify the name is free with `npm view packsafe`; if taken, choose the best available alternative such as "shipclean" and tell me). Work autonomously in the phases below, running tests after every phase. Never invent facts, links, download numbers or package names. If something is ambiguous, state your assumption in one line and continue.
+
+## 1. The problem
+Developers (especially beginners, students, freelancers) accidentally publish personal or internal data inside npm packages: OS usernames in absolute paths, home directories baked into bundles, sourcemaps listing local paths or embedding source with secrets, git name/email, hostnames, .npmrc tokens, .env files, private registry URLs. packsafe is a pre-publish gate that audits the EXACT set of files `npm publish` would ship, and knows the current machine's identity automatically. It runs fully offline.
+
+## 2. Hard constraints
+- JavaScript (ESM, "type": "module"), JSDoc types checked with `tsc --checkJs` (typescript as devDependency only; emit .d.ts).
+- ZERO runtime dependencies. Node built-ins only (node:fs, node:path, node:os, node:child_process, node:util parseArgs, node:test, node:assert, node:zlib if needed).
+- Cross-platform: Windows, macOS, Linux. Normalize paths to POSIX internally. Handle CRLF and UTF-8 BOM.
+- Support all currently non-EOL Node LTS lines (check the official release schedule; set "engines").
+- Everything free: GitHub Actions, CodeQL, Dependabot, npm provenance. No AI APIs, no paid services, no keys, no telemetry, no network access at runtime.
+- Dev dependencies ONLY: typescript, eslint (+ @eslint/js).
+- Beginner-maintainable: small modules, clear names, comments explaining WHY.
+
+## 3. Phase 0 - validate before coding (do first)
+Search the web and npm for existing tools that audit the npm tarball or repo for leaked usernames/home paths/sourcemap leaks/secrets before publishing (check at least: leakcheck, push-guard, publint, npm-packlist, secretlint, gitleaks, trufflehog, ls-engines, sourcemap-related tools). Write docs/COMPETITORS.md with real links, what each does and does NOT do, and one honest paragraph on differentiation. If an existing tool already does all of this, STOP and tell me.
+
+## 4. Behaviour (MVP)
+CLI: `packsafe [path] [options]`; also a programmatic API; also usable as `"prepublishOnly": "packsafe"`.
+Determine the publish set by running `npm pack --dry-run --json --ignore-scripts` (never run lifecycle scripts by default; option `--run-scripts` opt-in with a clear warning). Read those files from disk and scan them. If npm is unavailable, exit 2 with a helpful message (do not guess the file list).
+Windows note: since Node's 2024 security hardening, spawning `.cmd` files without a shell fails. Do NOT use `shell: true`. Resolve npm safely (use the `npm_execpath` env var when present, otherwise locate npm-cli.js next to the Node install, and run it with `process.execPath`). Test this logic.
+Machine identity (auto-detected, injectable for tests): OS username (os.userInfo), home directory, hostname, `git config user.name` and `user.email` (via execFile, failures tolerated). Flag exact, case-insensitive, boundary-aware matches; ignore identity strings shorter than 4 chars or on a small common-word denylist (e.g. "root", "admin", "user"). By default do NOT flag values that equal the public `author`, `contributors`, `repository` or `bugs` fields of package.json (intentionally public), configurable.
+Rules:
+- PS001 (error) absolute home paths: /home/<name>, /Users/<name>, C:\Users\<name> including JSON-escaped (C:\\Users\\name), forward-slash and file:// URL forms; generic placeholders (yourname, username, <user>, runner, ...) excluded.
+- PS002 (error) current machine identity found (username, hostname, git name/email).
+- PS003 (error) secrets: private key blocks, npm tokens (`npm_` + 36 chars), GitHub tokens (ghp_, gho_, github_pat_), AWS access key IDs, Slack tokens, `_authToken=` lines, generic `password|secret|token = "<long value>"` assignments. Redact values in output (show first 4 chars + length only). Keep the pattern list in one documented file.
+- PS004 (error/warn) sourcemaps (*.map): parse JSON; flag absolute paths in `sources`/`sourceRoot`; scan decoded `sourcesContent` with all other rules; warn (info) if a sourcemap ships at all and `sourcesContent` is embedded.
+- PS005 (error) risky files in the tarball: .env*, .npmrc, *.pem, *.key, id_rsa*, *.p12, .git*, *.sqlite, *.log, coverage output, .DS_Store, editor folders.
+- PS006 (warn) internal URLs: private IP ranges (10.x, 192.168.x, 172.16-31.x), *.internal/*.corp/*.local hostnames, `localhost` URLs in non-test shipped code (info), non-default `publishConfig.registry`, non-npmjs `resolved` hosts if a lockfile ships.
+- PS007 (info/warn) size sanity: total size, file count, top 5 largest files; warn over configurable thresholds.
+- PS008 (info) email addresses in shipped files except allowlisted ones.
+Config: optional `.packsaferc.json` (strict schema validation, clear errors): `allow` patterns (with required reason string), `denyWords` (extra internal names/codenames), `thresholds`, `failOn`. Inline allow via comment `packsafe-ignore-next-line` in text files.
+Output: human (colored only if TTY and NO_COLOR unset), `--format json`, `--format github` (annotations), `--format sarif`. Report RELATIVE paths only, never absolute paths and never full secret values (the tool must not leak what it detects). Exit codes: 0 clean, 1 findings at/above `--fail-on` (default error), 2 usage/runtime error.
+Scanner details: binary files detected (NUL bytes) and skipped except for rule PS005; files over 5 MB skipped with a warning; all regexes linear-time (no catastrophic backtracking); stream or chunk large files.
+
+## 5. Security requirements (implement AND test)
+- Never use `exec` or shell strings. Use execFile/spawn with argument arrays, `shell: false`, timeouts and max output buffers.
+- Read-only: never modify files, never run package scripts by default, never execute scanned code, never make network calls.
+- Stay inside the package root: resolve real paths, refuse symlinks that escape the root, reject `..` traversal in the npm file list.
+- Strict input validation for CLI args and config; avoid prototype pollution (Map / Object.create(null) for untrusted keys); no eval/Function.
+- Output hygiene: redaction of secrets, relative paths only, no environment dumps.
+- SECURITY.md with private vulnerability reporting via GitHub Security Advisories.
+- Supply chain: no runtime deps, `npm audit` clean, lockfile committed, GitHub Actions pinned to commit SHAs with least-privilege `permissions:`, Dependabot (actions + npm), CodeQL workflow, publishing via GitHub Actions with `--provenance`, `"files"` allowlist in package.json (verify with `npm pack --dry-run`; dogfood: run packsafe on itself in CI and fail on findings).
+
+## 6. Testing requirements
+- `node:test`. Fixtures: temporary npm packages created in os.tmpdir() (package.json, files, .npmignore variations); run the real `npm pack --dry-run --json --ignore-scripts` (no network); clean up afterward.
+- Machine identity provider must be injectable so tests are deterministic and never depend on the CI machine's real username.
+- Cover: every rule with positive and negative cases; JSON-escaped and Windows paths; sourcemap parsing (valid, malformed, huge, nested sourcesContent); redaction; package.json author allowlist; config validation errors; each output format; exit codes; CRLF/BOM; binary skipping; symlink escape; npm missing (mock PATH); Windows npm resolution logic (unit-tested with fake env); `--run-scripts` off by default (prove a malicious prepack script does NOT run); filenames with spaces, quotes, `;`, `$()`, leading dashes and unicode.
+- Adversarial/fuzz tests: random text and pathological repeated patterns must finish within a time limit and never throw.
+- Coverage: `node --test --experimental-test-coverage`, enforce >= 90% line coverage in CI.
+- End-to-end: install the packed tarball of packsafe into a clean folder and run the CLI against a fixture package containing one finding per rule.
+- CI matrix: ubuntu, windows, macos x supported Node versions; jobs for lint, typecheck, pack-content check, smoke test.
+
+## 7. Project structure
+src/ (cli.js, index.js, publish-set.js, identity.js, scanner.js, sourcemap.js, redact.js, config.js, paths.js, rules/*.js, reporters/*.js), bin/packsafe.js, test/ (unit/, e2e/, helpers), docs/ (COMPETITORS.md, RULES.md, LIMITATIONS.md, SECURITY-REVIEW.md), .github/ (workflows/ci.yml, codeql.yml, release.yml, dependabot.yml, ISSUE_TEMPLATE/, PULL_REQUEST_TEMPLATE.md), README.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, CHANGELOG.md, LICENSE (MIT), eslint.config.js, tsconfig for checkJs, .gitignore, .editorconfig.
+
+## 8. README requirements
+Problem statement with a realistic before/after example, `npx packsafe` quick start, `prepublishOnly` setup, every rule with an example, config reference, CI recipe, honest Limitations (no tool can guarantee nothing leaks; minified/obfuscated content, binary files, encoded secrets are out of scope), FAQ ("how is this different from gitleaks/secretlint?"), comparison table with real competitors from Phase 0. No hype, no fake badges.
+
+## 9. Process and deliverables
+- Phases: (0) validation, (1) scaffold + CI, (2) publish-set + identity + scanner, (3) rules + sourcemaps + redaction, (4) CLI + config + reporters, (5) tests to coverage target, (6) docs, (7) your own security review with checklist in docs/SECURITY-REVIEW.md, (8) release readiness.
+- After each phase run lint, typecheck and tests, fix failures, then give a 3-line status.
+- Do not publish to npm or push anything. Finish with: a release checklist for me (npm 2FA, trusted publishing/provenance, creating the GitHub repo, private vulnerability reporting, first tag), exact commands to run, known limitations, and a first-30-days feedback plan (issue templates, a pinned "false positives" issue, 3 honest places to share it).
+- Be critical: if a design decision is weak, say so and propose the smallest safe alternative.
+
+## 10. Acceptance criteria (verify each, report pass/fail)
+Tests pass on 3 OSes; coverage >= 90%; zero runtime dependencies; `npm pack --dry-run` shows only intended files; `npm audit` clean; no `exec`/`eval`/`shell: true` in src; packsafe passes when run on itself; a malicious prepack script is proven NOT to run by default; output never contains absolute paths or unredacted secrets; every rule has a test and a doc entry; README examples actually run.
+
+Begin with Phase 0 now.

@@ -1,0 +1,24 @@
+{
+  "allow": [
+    {
+      "pattern": "README.md",
+      "rule": "PS001",
+      "reason": "Illustrative before/after examples in README.md documentation"
+    },
+    {
+      "pattern": "README.md",
+      "rule": "PS003",
+      "reason": "Illustrative fake npm_xxxx... token example in README.md documentation"
+    },
+    {
+      "pattern": "README.md",
+      "rule": "PS006",
+      "reason": "Illustrative internal URL and private IP examples in README.md documentation"
+    },
+    {
+      "pattern": "README.md",
+      "rule": "PS008",
+      "reason": "Illustrative email example in README.md documentation"
+    }
+  ]
+}

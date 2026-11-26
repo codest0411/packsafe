@@ -1,0 +1,26 @@
+name: Bug Report
+description: Report a bug or false negative in packsafe
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the bug or unexpected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Provide the smallest package.json / file snippet that reproduces the issue (redact any real secrets!).
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Environment
+      placeholder: "Node.js v24.x, npm 11.x, OS (Windows/macOS/Linux), packsafe 0.1.0"
+    validations:
+      required: true
